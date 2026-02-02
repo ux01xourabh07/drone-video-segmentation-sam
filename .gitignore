@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+
+# Virtual Environments
+env/
+venv/
+.env
+
+# Large Model Weights (Download these manually)
+weights/*.pth
+!weights/.gitkeep
+
+# User Data & Outputs
+input_videos/
+output_videos/
+input_images/
+output_images/
+
+# IDE Settings
+.vscode/
+.idea/
+*.swp
+
+# Logs & Temporary Files
+*.log
+tmp/
