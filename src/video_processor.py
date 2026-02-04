@@ -30,8 +30,9 @@ class VideoProcessorThread(QThread):
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             
-            # Smart Resize for Speed (Lower is faster on CPU)
-            MAX_DIM = 640 
+            # Smart Resize for Speed (Lower is faster on CPU/Heavy Models)
+            # Reduced to 512 for ViT-H performance optimization
+            MAX_DIM = 512 
             scale = 1.0
             if max(height, width) > MAX_DIM:
                 scale = MAX_DIM / max(height, width)

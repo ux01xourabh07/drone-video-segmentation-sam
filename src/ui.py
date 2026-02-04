@@ -1,7 +1,8 @@
 
 import os
+import torch
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-                             QPushButton, QLabel, QFileDialog, QMessageBox, QApplication)
+                             QPushButton, QLabel, QFileDialog, QMessageBox, QApplication, QComboBox)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap 
 from src.backend import SamController
@@ -41,7 +42,16 @@ class MainWindow(QMainWindow):
 
         # Backend
         self.backend = None
-        self.checkpoint_path = os.path.join("weights", "sam_vit_h_4b8939.pth") 
+        
+        # Dynamic Weight Selection
+        # Default to Auto check for initial path
+        device = SamController.get_device("auto")
+        is_gpu = str(device) == "cuda" or (hasattr(device, 'type') and device.type == 'privateuseone')
+        
+        if is_gpu:
+            self.checkpoint_path = os.path.join("weights", "sam_vit_h_4b8939.pth")
+        else:
+            self.checkpoint_path = os.path.join("weights", "sam_vit_b_01ec64.pth") 
         
         # State
         self.video_path = None
@@ -89,6 +99,13 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(False)
         self.btn_stop.setStyleSheet("background-color: #D70000;")
 
+        # Device Selection
+        self.combo_device = QComboBox()
+        self.combo_device.addItems(["Auto-Detect", "NVIDIA (CUDA)", "AMD (DirectML)", "CPU Only"])
+        self.combo_device.setFixedWidth(150)
+        self.combo_device.setStyleSheet("padding: 5px;")
+        
+        btn_layout.addWidget(self.combo_device)
         btn_layout.addWidget(self.btn_select)
         btn_layout.addWidget(self.btn_start)
         btn_layout.addWidget(self.btn_stop)
@@ -106,10 +123,25 @@ class MainWindow(QMainWindow):
 
     def ensure_backend_loaded(self):
         if not self.backend:
-            self.lbl_status.setText("Initializing SAM Engine...")
+            # Update path based on selection
+            selection = self.combo_device.currentText()
+            if "CPU" in selection:
+                 self.checkpoint_path = os.path.join("weights", "sam_vit_b_01ec64.pth")
+            else:
+                 # For Auto (with GPU), CUDA, or DirectML, try High Weight
+                 self.checkpoint_path = os.path.join("weights", "sam_vit_h_4b8939.pth")
+
+            self.lbl_status.setText(f"Initializing SAM ({os.path.basename(self.checkpoint_path)})...")
             QApplication.processEvents()
             try:
-                self.backend = SamController(self.checkpoint_path)
+                # Map UI selection to preference string
+                selection = self.combo_device.currentText()
+                pref = "auto"
+                if "CUDA" in selection: pref = "cuda"
+                elif "DirectML" in selection: pref = "directml"
+                elif "CPU" in selection: pref = "cpu"
+                
+                self.backend = SamController(self.checkpoint_path, device_preference=pref)
                 self.lbl_status.setText("Engine Ready.")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to load model: {str(e)}")

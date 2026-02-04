@@ -7,25 +7,55 @@ import gc
 from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
 
 class SamController:
-    def __init__(self, checkpoint_path, model_type="vit_h"):
-        # Model Loading Logic with ViT-B Fallback
-        weight_dir = os.path.dirname(checkpoint_path) or "weights"
-        vit_b_path = os.path.join(weight_dir, "sam_vit_b_01ec64.pth")
+    @staticmethod
+    def get_device(preference="auto"):
+        """
+        Robustly detects the best available device based on preference.
+        preference: 'auto', 'cuda', 'directml', 'cpu'
+        """
+        preference = preference.lower()
         
-        if os.path.exists(vit_b_path):
-            print(f"Optimization: Switching to ViT-B: {vit_b_path}")
-            self.checkpoint_path = vit_b_path
-            self.model_type = "vit_b"
-        else:
-            print(f"Using provided checkpoint: {checkpoint_path}")
-            self.checkpoint_path = checkpoint_path
-            if "vit_h" in os.path.basename(checkpoint_path): self.model_type = "vit_h"
-            elif "vit_l" in os.path.basename(checkpoint_path): self.model_type = "vit_l"
-            elif "vit_b" in os.path.basename(checkpoint_path): self.model_type = "vit_b"
-            else: self.model_type = model_type
+        if preference == "cuda":
+            if torch.cuda.is_available(): return "cuda"
+            print("Warning: CUDA requested but not available. Falling back to Auto.")
+            
+        if preference == "directml":
+            try:
+                import torch_directml
+                if torch_directml.is_available(): return torch_directml.device()
+            except ImportError:
+                print("Warning: DirectML requested but torch-directml not found. Falling back to Auto.")
 
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"Loading SAM ({self.model_type}) on {self.device}...")
+        if preference == "cpu":
+            return "cpu"
+
+        # Auto-Detect Logic
+        if torch.cuda.is_available():
+            return "cuda"
+        
+        try:
+            import torch_directml
+            if torch_directml.is_available():
+                return torch_directml.device()
+        except ImportError:
+            pass
+            
+        return "cpu"
+
+    def __init__(self, checkpoint_path, model_type="vit_h", device_preference="auto"):
+        print(f"Using provided checkpoint: {checkpoint_path}")
+        self.checkpoint_path = checkpoint_path
+        
+        # Determine model type from filename if possible, otherwise use argument
+        if "vit_h" in os.path.basename(checkpoint_path): self.model_type = "vit_h"
+        elif "vit_l" in os.path.basename(checkpoint_path): self.model_type = "vit_l"
+        elif "vit_b" in os.path.basename(checkpoint_path): self.model_type = "vit_b"
+        else: self.model_type = model_type
+
+        # Device Selection
+        self.device = self.get_device(device_preference)
+        device_name = "DirectML" if str(self.device).startswith("privateuseone") else str(self.device).upper()
+        print(f"Loading SAM ({self.model_type}) on {device_name}...")
         
         gc.collect()
         self.sam = sam_model_registry[self.model_type](checkpoint=self.checkpoint_path)
